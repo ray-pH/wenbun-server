@@ -4,6 +4,8 @@ import passport from "passport";
 import cors from "cors"
 import dotenv from "dotenv";
 import "./auth";
+import profileDataRouter from "./profiledata";
+import reviewLogRouter from "./reviewlog";
 
 dotenv.config();
 
@@ -16,6 +18,8 @@ app.use(cors({
     origin: true, // allow all origins for development
     credentials: true,
 }));
+
+app.use(express.json());
 
 app.use(
     session({
@@ -55,6 +59,9 @@ app.get("/auth/logout", (req, res) => {
     const clientSettingsUrl = process.env.CLIENT_URL! + "/settings";
     req.logout(() => res.redirect(clientSettingsUrl));
 });
+
+app.use("/profiledata", profileDataRouter);
+app.use("/reviewlog", reviewLogRouter);
 
 app.listen(3000, () => {
     console.log("Server running on http://localhost:3000");
