@@ -1,4 +1,3 @@
-
 services:
   db:
     image: postgres:16
@@ -24,9 +23,6 @@ services:
       - SESSION_SECRET=${SESSION_SECRET}
     depends_on:
       - db
-    volumes:
-      - .:/app
-    command: npm run dev
 
 volumes:
   db-data:

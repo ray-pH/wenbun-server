@@ -15,7 +15,7 @@ const app = express();
 // app.set('trust proxy', 1);
 
 app.use(cors({
-    origin: true, // allow all origins for development
+    origin: process.env.NODE_ENV === "production" ? process.env.CLIENT_URL : true,
     credentials: true,
 }));
 
@@ -26,8 +26,10 @@ app.use(
         secret: process.env.SESSION_SECRET!,
         resave: false,
         saveUninitialized: false,
-        // If frontend is on a different domain and you need cross-site cookies for API calls:
-        // cookie: { sameSite: 'lax', secure: false } // set secure:true on HTTPS
+        cookie: {
+            sameSite: process.env.NODE_ENV === "production" ? "lax" : undefined,
+            secure: process.env.NODE_ENV === "production",
+        },
     }),
 );
 
@@ -63,6 +65,7 @@ app.get("/auth/logout", (req, res) => {
 app.use("/profiledata", profileDataRouter);
 app.use("/reviewlog", reviewLogRouter);
 
-app.listen(3000, () => {
-    console.log("Server running on http://localhost:3000");
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+    console.log(`Server running on http://localhost:${port}`);
 });
