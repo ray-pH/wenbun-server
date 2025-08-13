@@ -1,5 +1,7 @@
 import express from "express";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
+import { db } from "./db";
 import passport from "passport";
 import cors from "cors"
 import dotenv from "dotenv";
@@ -10,12 +12,13 @@ import reviewLogRouter from "./reviewlog";
 dotenv.config();
 
 const app = express();
+const isProd = process.env.NODE_ENV === "production";
 
 // If behind a proxy/load balancer in prod, uncomment these:
-// app.set('trust proxy', 1);
+app.set('trust proxy', 1);
 
 app.use(cors({
-    origin: process.env.NODE_ENV === "production" ? process.env.CLIENT_URL : true,
+    origin: isProd ? process.env.CLIENT_URL : true,
     credentials: true,
 }));
 
@@ -23,13 +26,25 @@ app.use(express.json());
 
 app.use(
     session({
+        store: new (connectPgSimple(session))({
+            pool: db,
+            createTableIfMissing: true,
+        }),
         secret: process.env.SESSION_SECRET!,
         resave: false,
         saveUninitialized: false,
+        // if under the same domain:
+        // cookie: {
+        //     sameSite: process.env.NODE_ENV === "production" ? "lax" : undefined,
+        //     secure: process.env.NODE_ENV === "production",
+        // },
+        // otherwise:
         cookie: {
-            sameSite: process.env.NODE_ENV === "production" ? "lax" : undefined,
-            secure: process.env.NODE_ENV === "production",
-        },
+            httpOnly: true,
+            secure: isProd,
+            sameSite: "none",
+            maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
+        }
     }),
 );
 
