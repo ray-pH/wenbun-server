@@ -10,4 +10,11 @@ declare global {
         }
     }
 }
+
+declare module "express-session" {
+    interface SessionData {
+        passport?: { user: any };
+    }
+}
+
 export {};
