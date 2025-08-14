@@ -80,6 +80,8 @@ router.post("/", async (req, res) => {
         console.error(e);
         await client.query("ROLLBACK");
         res.status(500).json({ error: "Failed to insert review log" });
+    } finally {
+        client.release();
     }
 });
 
