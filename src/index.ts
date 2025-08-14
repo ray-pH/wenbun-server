@@ -18,7 +18,7 @@ const isProd = process.env.NODE_ENV === "production";
 app.set('trust proxy', 1);
 
 app.use(cors({
-    origin: isProd ? process.env.CLIENT_URL : true,
+    origin: isProd ? process.env.CLIENT_BASE_URL ?? process.env.CLIENT_URL : true,
     credentials: true,
 }));
 
