@@ -3,13 +3,7 @@ import { db } from "./db";
 
 const router = Router();
 
-function requireAuth(req: Request, res: Response, next: NextFunction) {
-    // tweak if your user field differs
-    if (!req.user) return res.status(401).json({ error: "Not authenticated" });
-    next();
-}
-
-router.get("/", requireAuth, async (req, res) => {
+router.get("/", async (req, res) => {
     const userId = req.user!.id;
     const q = await db.query("SELECT data FROM profile_data WHERE user_id = $1 AND is_backup = false", [userId]);
     if (q.rowCount === 0) return res.status(204).end();
@@ -17,7 +11,7 @@ router.get("/", requireAuth, async (req, res) => {
     res.json(profile);
 });
 
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", async (req, res) => {
     const { decision } = req.query;
     switch (decision) {
         case "pull": {

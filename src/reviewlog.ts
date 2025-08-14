@@ -5,13 +5,7 @@ import { PoolClient } from "pg";
 
 const router = Router();
 
-function requireAuth(req: Request, res: Response, next: NextFunction) {
-    // tweak if your user field differs
-    if (!req.user) return res.status(401).json({ error: "Not authenticated" });
-    next();
-}
-
-router.get("/", requireAuth, async (req, res) => {
+router.get("/", async (req, res) => {
     const userId = req.user!.id;
     const { from } = req.query;
     // query array of review log that are newer than fromDate
@@ -27,7 +21,7 @@ router.get("/", requireAuth, async (req, res) => {
     res.json(q.rows);
 });
 
-router.get("/mostrecent/", requireAuth, async (req, res) => {
+router.get("/mostrecent/", async (req, res) => {
     const userId = req.user!.id;
     const q = await db.query(
         `
@@ -42,7 +36,7 @@ router.get("/mostrecent/", requireAuth, async (req, res) => {
     res.json(q.rows[0].review_log);
 });
 
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", async (req, res) => {
     const userId = req.user!.id;
     const { force } = req.query;
     
