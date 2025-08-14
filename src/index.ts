@@ -64,14 +64,14 @@ app.use(
     }),
 );
 
+app.use(passport.initialize());
+app.use(passport.session());
+
 app.use((req, res, next) => {
     if (!req.session.passport && req.path.startsWith("/auth")) return next();
     if (!req.session.passport) return res.status(401).json({ error: "Not authenticated" });
     next();
 })
-
-app.use(passport.initialize());
-app.use(passport.session());
 
 // Kick off OAuth from the SERVER route:
 app.get(
