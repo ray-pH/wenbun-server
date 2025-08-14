@@ -41,6 +41,7 @@ router.post("/", async (req, res) => {
     const { force } = req.query;
     
     const client: PoolClient = await db.connect();
+    let inTransaction = false;
     
     try {
         if (!Array.isArray(req.body)) {
@@ -63,6 +64,8 @@ router.post("/", async (req, res) => {
             rows
         );
         await client.query("BEGIN");
+        inTransaction = true;
+        
         if (force === "true") {
             // delete all existing review logs
             await client.query(
@@ -74,11 +77,17 @@ router.post("/", async (req, res) => {
             );
         }
         await client.query(sql);
-         await client.query("COMMIT");
+        
+        await client.query("COMMIT");
+        inTransaction = false;
+        
         res.json({ ok: true, inserted: rows.length });
     } catch (e) {
         console.error(e);
-        await client.query("ROLLBACK");
+        if (inTransaction) {
+            try { await client.query("ROLLBACK"); }
+            catch (e) { console.error("Rollback failed: ", e); }
+        }
         res.status(500).json({ error: "Failed to insert review log" });
     } finally {
         client.release();
