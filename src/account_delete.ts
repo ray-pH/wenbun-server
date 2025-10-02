@@ -88,7 +88,7 @@ router.get("/delete", async (req, res) => {
 
         await db.query("DELETE FROM users WHERE id = $1", [record.user_id]);
 
-        await db.query("DELETE FROM deletion_tokens WHERE token = $1", [token]);
+        await db.query("DELETE FROM deletion_tokens WHERE user_id = $1", [record.user_id]);
 
         res.send("Your account has been deleted.");
     } catch (err) {
