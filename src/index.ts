@@ -8,6 +8,7 @@ import dotenv from "dotenv";
 import "./auth";
 import profileDataRouter from "./profiledata";
 import reviewLogRouter from "./reviewlog";
+import accountDeleteRouter from "./account_delete";
 import rateLimit from "express-rate-limit";
 
 dotenv.config();
@@ -70,6 +71,7 @@ app.use(passport.session());
 
 app.use((req, res, next) => {
     if (!req.session.passport && req.path.startsWith("/auth")) return next();
+    if (!req.session.passport && req.path.startsWith("/account-delete")) return next();
     if (!req.session.passport) return res.status(401).json({ error: "Not authenticated" });
     next();
 })
@@ -102,6 +104,7 @@ app.get("/auth/logout", (req, res) => {
 
 app.use("/profiledata", profileDataRouter);
 app.use("/reviewlog", reviewLogRouter);
+app.use("/account-delete", accountDeleteRouter);
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
