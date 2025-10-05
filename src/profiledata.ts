@@ -1,5 +1,6 @@
 import { type Request, type Response, type NextFunction, Router } from "express";
 import { db } from "./db";
+import { PoolClient } from "pg";
 
 const router = Router();
 
@@ -18,6 +19,7 @@ router.post("/", async (req, res) => {
             pullPost(req, res);
         } break;
         case "push": {
+            pushPost(req, res);
         } break;
         default: {
             normalPost(req, res);
@@ -75,28 +77,42 @@ async function pushPost(req: Request, res: Response) {
     // push the backup profile data to remote
     const userId = req.user!.id;
     const profileData = req.body;
-    const client = await db.connect();
+    const client: PoolClient = await db.connect();
+    let inTransaction = false;
+        
+    try {
+        await client.query("BEGIN");
+        inTransaction = true;
+        await client.query(
+            `
+            UPDATE profile_data
+            SET is_backup = true
+            WHERE user_id = $1 AND is_backup = false
+            `,
+            [userId]
+        );
+        
+        await client.query(
+            `
+            INSERT INTO profile_data (user_id, data, updated_at)
+            VALUES ($1, $2, now())
+            `,
+            [userId, profileData]
+        );
+        
+        await client.query("COMMIT");
+        inTransaction = false;
+        res.json({ ok: true });
+    } catch (e) {
+        if (inTransaction) {
+            try { await client.query("ROLLBACK"); }
+            catch (e) { console.error("Rollback failed: ", e); }
+        }
+        res.status(500).json({ error: "Failed to push data" });
+    } finally {
+        client.release();
+    }
     
-    await client.query("BEGIN");
-    
-    await client.query(
-        `
-        UPDATE profile_data
-        SET is_backup = true
-        WHERE user_id = $1 AND is_backup = false
-        `,
-        [userId]
-    );
-    
-    await client.query(
-        `
-        INSERT INTO profile_data (user_id, data, updated_at)
-        VALUES ($1, $2, now())
-        `,
-        [userId, profileData]
-    );
-    
-    await client.query("COMMIT");
 }
 
 export default router;
