@@ -15,6 +15,7 @@ dotenv.config();
 
 const app = express();
 const isProd = process.env.NODE_ENV === "production";
+const allowedOrigins = (process.env.CLIENT_URLS ?? "").split(",").map(s => s.trim());
 
 const limiter = rateLimit({
 	windowMs: 60_000, // 1 minutes
@@ -28,7 +29,17 @@ app.set('trust proxy', 1);
 
 app.use(limiter);
 app.use(cors({
-    origin: isProd ? process.env.CLIENT_BASE_URL ?? process.env.CLIENT_URL : true,
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like curl or mobile app)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+    
+        console.warn("Blocked CORS request from:", origin);
+        return callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
 }));
 
@@ -76,19 +87,30 @@ app.use((req, res, next) => {
     next();
 })
 
-// Kick off OAuth from the SERVER route:
 app.get(
-    "/auth/google",
-    passport.authenticate("google", { scope: ["profile", "email"] }),
+    "/auth/google", 
+    (req, res, next) => {
+        // store redirect param in session (optional per-client)
+        const redirectParam = req.query.redirect as string | undefined;
+        const state = redirectParam ? encodeURIComponent(redirectParam) : "";
+        passport.authenticate("google", { scope: ["profile", "email"], state })(req, res, next);
+    }
 );
 
 // Google redirects back here (must match Console redirect URI)
 app.get(
     "/auth/google/callback",
     passport.authenticate("google", { failureRedirect: "/" }),
-    (_req, res) => {
-        const clientSettingsUrl = process.env.CLIENT_URL! + "/settings";
-        res.redirect(clientSettingsUrl);
+    (req, res) => {
+        const storedRedirect = req.query.state
+                    ? decodeURIComponent(req.query.state as string)
+                    : undefined;
+    
+        // pick the first allowed if invalid or missing
+        const redirectUrl = allowedOrigins.find(o => storedRedirect?.startsWith(o))
+            ? storedRedirect!
+            : allowedOrigins[0] + '/settings';
+        res.redirect(redirectUrl);
     },
 );
 
@@ -98,8 +120,11 @@ app.get("/profile", (req, res) => {
 });
 
 app.get("/auth/logout", (req, res) => {
-    const clientSettingsUrl = process.env.CLIENT_URL! + "/settings";
-    req.logout(() => res.redirect(clientSettingsUrl));
+    const redirectParam = req.query.redirect as string | undefined;
+    const redirectUrl = allowedOrigins.find(o => redirectParam?.startsWith(o))
+        ? redirectParam!
+        : allowedOrigins[0] + '/settings';
+    req.logout(() => res.redirect(redirectUrl));
 });
 
 app.use("/profiledata", profileDataRouter);
