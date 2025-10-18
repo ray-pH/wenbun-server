@@ -1,6 +1,10 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { db } from "./db";
+import express from "express";
+import { allowedOrigins } from "./config";
+
+const authRouter = express.Router();
 
 enum PROVIDER {
     GOOGLE = "google",
@@ -129,4 +133,39 @@ passport.use(
     ),
 );
 
-export default passport;
+authRouter.get(
+    "/google", 
+    (req, res, next) => {
+        // store redirect param in session (optional per-client)
+        const redirectParam = req.query.redirect as string | undefined;
+        const state = redirectParam ? encodeURIComponent(redirectParam) : "";
+        passport.authenticate("google", { scope: ["profile", "email"], state })(req, res, next);
+    }
+);
+
+// Google redirects back here (must match Console redirect URI)
+authRouter.get(
+    "/google/callback",
+    passport.authenticate("google", { failureRedirect: "/" }),
+    (req, res) => {
+        const storedRedirect = req.query.state
+                    ? decodeURIComponent(req.query.state as string)
+                    : undefined;
+    
+        // pick the first allowed if invalid or missing
+        const redirectUrl = allowedOrigins.find(o => storedRedirect?.startsWith(o))
+            ? storedRedirect!
+            : allowedOrigins[0] + '/settings';
+        res.redirect(redirectUrl);
+    },
+);
+
+authRouter.get("/logout", (req, res) => {
+    const redirectParam = req.query.redirect as string | undefined;
+    const redirectUrl = allowedOrigins.find(o => redirectParam?.startsWith(o))
+        ? redirectParam!
+        : allowedOrigins[0] + '/settings';
+    req.logout(() => res.redirect(redirectUrl));
+});
+
+export default authRouter;

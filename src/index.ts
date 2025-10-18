@@ -5,17 +5,16 @@ import { db } from "./db";
 import passport from "passport";
 import cors from "cors"
 import dotenv from "dotenv";
-import "./auth";
+import authRouter from "./auth";
 import profileDataRouter from "./profiledata";
 import reviewLogRouter from "./reviewlog";
 import accountDeleteRouter from "./account_delete";
 import rateLimit from "express-rate-limit";
+import { allowedOrigins, isProd } from "./config";
 
 dotenv.config();
 
 const app = express();
-const isProd = process.env.NODE_ENV === "production";
-const allowedOrigins = (process.env.CLIENT_URLS ?? "").split(",").map(s => s.trim());
 
 const limiter = rateLimit({
 	windowMs: 60_000, // 1 minutes
@@ -87,46 +86,12 @@ app.use((req, res, next) => {
     next();
 })
 
-app.get(
-    "/auth/google", 
-    (req, res, next) => {
-        // store redirect param in session (optional per-client)
-        const redirectParam = req.query.redirect as string | undefined;
-        const state = redirectParam ? encodeURIComponent(redirectParam) : "";
-        passport.authenticate("google", { scope: ["profile", "email"], state })(req, res, next);
-    }
-);
-
-// Google redirects back here (must match Console redirect URI)
-app.get(
-    "/auth/google/callback",
-    passport.authenticate("google", { failureRedirect: "/" }),
-    (req, res) => {
-        const storedRedirect = req.query.state
-                    ? decodeURIComponent(req.query.state as string)
-                    : undefined;
-    
-        // pick the first allowed if invalid or missing
-        const redirectUrl = allowedOrigins.find(o => storedRedirect?.startsWith(o))
-            ? storedRedirect!
-            : allowedOrigins[0] + '/settings';
-        res.redirect(redirectUrl);
-    },
-);
-
 app.get("/profile", (req, res) => {
     if (!req.user) return res.status(401).send("Not logged in");
     res.json(req.user);
 });
 
-app.get("/auth/logout", (req, res) => {
-    const redirectParam = req.query.redirect as string | undefined;
-    const redirectUrl = allowedOrigins.find(o => redirectParam?.startsWith(o))
-        ? redirectParam!
-        : allowedOrigins[0] + '/settings';
-    req.logout(() => res.redirect(redirectUrl));
-});
-
+app.use("/auth", authRouter);
 app.use("/profiledata", profileDataRouter);
 app.use("/reviewlog", reviewLogRouter);
 app.use("/account-delete", accountDeleteRouter);
