@@ -87,13 +87,10 @@ app.use((req, res, next) => {
         return next();
     }
     // Allow if authenticated via session OR JWT
-    // if ((req.session as any)?.passport || (req as any).user) {
-    console.log("req.user", req.user)
     if ((req.session as any)?.passport || (req as any).user) {
         return next();
     }
     return res.status(401).json({ error: "Not authenticated" });
-    next();
 })
 
 app.get("/profile", (req, res) => {
