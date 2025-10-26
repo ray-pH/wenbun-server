@@ -11,7 +11,8 @@ router.post("/request-delete", async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: "Email required" });
     
-    const clientUrl = process.env.CLIENT_URL;
+    const allowedOrigins = (process.env.CLIENT_URLS ?? "").split(",").map(s => s.trim());
+    const clientUrl = allowedOrigins[0];
 
     try {
         const { rows } = await db.query(

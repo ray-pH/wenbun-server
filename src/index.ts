@@ -1,20 +1,21 @@
-import express from "express";
+import express, { NextFunction } from "express";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { db } from "./db";
 import passport from "passport";
 import cors from "cors"
 import dotenv from "dotenv";
-import "./auth";
+import authRouter from "./auth";
 import profileDataRouter from "./profiledata";
 import reviewLogRouter from "./reviewlog";
 import accountDeleteRouter from "./account_delete";
 import rateLimit from "express-rate-limit";
+import { allowedOrigins, isProd } from "./config";
+import { jwtMiddleware } from "./middleware/jwtMiddleware";
 
 dotenv.config();
 
 const app = express();
-const isProd = process.env.NODE_ENV === "production";
 
 const limiter = rateLimit({
 	windowMs: 60_000, // 1 minutes
@@ -28,7 +29,17 @@ app.set('trust proxy', 1);
 
 app.use(limiter);
 app.use(cors({
-    origin: isProd ? process.env.CLIENT_BASE_URL ?? process.env.CLIENT_URL : true,
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like curl or mobile app)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+    
+        console.warn("Blocked CORS request from:", origin);
+        return callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
 }));
 
@@ -67,41 +78,30 @@ app.use(
 );
 
 app.use(passport.initialize());
+app.use(jwtMiddleware);
 app.use(passport.session());
 
 app.use((req, res, next) => {
-    if (!req.session.passport && req.path.startsWith("/auth")) return next();
-    if (!req.session.passport && req.path.startsWith("/account-delete")) return next();
-    if (!req.session.passport) return res.status(401).json({ error: "Not authenticated" });
+    // Skip auth for login/logout and account deletion routes
+    if (req.path.startsWith("/auth") || req.path.startsWith("/account-delete")) {
+        return next();
+    }
+    // Allow if authenticated via session OR JWT
+    // if ((req.session as any)?.passport || (req as any).user) {
+    console.log("req.user", req.user)
+    if ((req.session as any)?.passport || (req as any).user) {
+        return next();
+    }
+    return res.status(401).json({ error: "Not authenticated" });
     next();
 })
-
-// Kick off OAuth from the SERVER route:
-app.get(
-    "/auth/google",
-    passport.authenticate("google", { scope: ["profile", "email"] }),
-);
-
-// Google redirects back here (must match Console redirect URI)
-app.get(
-    "/auth/google/callback",
-    passport.authenticate("google", { failureRedirect: "/" }),
-    (_req, res) => {
-        const clientSettingsUrl = process.env.CLIENT_URL! + "/settings";
-        res.redirect(clientSettingsUrl);
-    },
-);
 
 app.get("/profile", (req, res) => {
     if (!req.user) return res.status(401).send("Not logged in");
     res.json(req.user);
 });
 
-app.get("/auth/logout", (req, res) => {
-    const clientSettingsUrl = process.env.CLIENT_URL! + "/settings";
-    req.logout(() => res.redirect(clientSettingsUrl));
-});
-
+app.use("/auth", authRouter);
 app.use("/profiledata", profileDataRouter);
 app.use("/reviewlog", reviewLogRouter);
 app.use("/account-delete", accountDeleteRouter);
