@@ -30,8 +30,9 @@ This is the most important part. You need to provide Railway with the same envir
     *   `GOOGLE_CLIENT_ID`: You need to get this from your Google Cloud Console for Google OAuth.
     *   `GOOGLE_CLIENT_SECRET`: You also get this from the Google Cloud Console.
     *   `SESSION_SECRET`: This should be a long, random string that you generate yourself. It's used to secure user sessions.
+    *   `JWT_SECRET`: This should also be a long, random, and securely generated string. It's used for signing and verifying JSON Web Tokens (JWTs), which are used for authentication.
     *   `NODE_ENV`: Set this to `production`. This is important because your code has specific logic for the production environment (like the CORS and cookie settings).
-    *   `CLIENT_URL`: The URL of your front-end application. This is used for CORS and for redirecting after OAuth.
+    *   `CLIENT_URLS`: A comma-separated list of your front-end application URLs. This is used for CORS and for redirecting after OAuth.
     *   `PORT`: Railway sets this automatically, so you don't need to set it yourself. Your `index.ts` file already correctly uses `process.env.PORT`.
 
 ### Step 4: Deployment
@@ -54,6 +55,6 @@ You can monitor the deployment logs in the "Deployments" tab of your service.
     *   `GOOGLE_CLIENT_SECRET`
     *   `SESSION_SECRET`
     *   `NODE_ENV` (set to `production`)
-    *   `CLIENT_URL`
+    *   `CLIENT_URLS`
 
 That's it! Railway is designed to make this process as seamless as possible by leveraging the `Dockerfile` in your project.

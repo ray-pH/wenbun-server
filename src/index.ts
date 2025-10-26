@@ -1,4 +1,4 @@
-import express from "express";
+import express, { NextFunction } from "express";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { db } from "./db";
@@ -11,6 +11,7 @@ import reviewLogRouter from "./reviewlog";
 import accountDeleteRouter from "./account_delete";
 import rateLimit from "express-rate-limit";
 import { allowedOrigins, isProd } from "./config";
+import { jwtMiddleware } from "./middleware/jwtMiddleware";
 
 dotenv.config();
 
@@ -77,12 +78,21 @@ app.use(
 );
 
 app.use(passport.initialize());
+app.use(jwtMiddleware);
 app.use(passport.session());
 
 app.use((req, res, next) => {
-    if (!req.session.passport && req.path.startsWith("/auth")) return next();
-    if (!req.session.passport && req.path.startsWith("/account-delete")) return next();
-    if (!req.session.passport) return res.status(401).json({ error: "Not authenticated" });
+    // Skip auth for login/logout and account deletion routes
+    if (req.path.startsWith("/auth") || req.path.startsWith("/account-delete")) {
+        return next();
+    }
+    // Allow if authenticated via session OR JWT
+    // if ((req.session as any)?.passport || (req as any).user) {
+    console.log("req.user", req.user)
+    if ((req.session as any)?.passport || (req as any).user) {
+        return next();
+    }
+    return res.status(401).json({ error: "Not authenticated" });
     next();
 })
 

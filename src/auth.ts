@@ -1,8 +1,10 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
+import type { AuthenticateOptions } from "passport";
 import { db } from "./db";
 import express from "express";
 import { allowedOrigins } from "./config";
+import jwt from "jsonwebtoken";
 
 const authRouter = express.Router();
 
@@ -102,63 +104,109 @@ passport.deserializeUser(async (id: string, done) => {
 });
 
 passport.use(
-    new GoogleStrategy(
-        {
-            clientID: process.env.GOOGLE_CLIENT_ID!,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-            callbackURL: "/auth/google/callback",
-        },
-        async (_accessToken, _refreshToken, profile, done) => {
-            try {
-                const email = profile.emails?.[0]?.value ?? null;
-                const name =
-                    profile.displayName ||
-                    [profile.name?.givenName, profile.name?.familyName]
-                        .filter(Boolean)
-                        .join(" ") ||
-                    null;
-
-                const user = await findOrCreateUserFromProvider({
-                    provider: PROVIDER.GOOGLE,
-                    providerUserId: profile.id,
-                    email,
-                    name,
-                });
-
-                return done(null, user);
-            } catch (err) {
-                return done(err);
-            }
-        },
-    ),
+  "google-session",
+  new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID!,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    callbackURL: "/auth/google/callback",
+  }, verifyUser)
 );
 
-authRouter.get(
-    "/google", 
-    (req, res, next) => {
-        // store redirect param in session (optional per-client)
+passport.use(
+  "google-token",
+  new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID!,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    callbackURL: "/auth/google/token/callback",
+  }, verifyUser)
+);
+
+async function verifyUser(_accessToken: string, _refreshToken: string, profile: any, done: any) {
+    try {
+        const email = profile.emails?.[0]?.value ?? null;
+        const name =
+            profile.displayName ||
+            [profile.name?.givenName, profile.name?.familyName]
+                .filter(Boolean)
+                .join(" ") ||
+            null;
+
+        const user = await findOrCreateUserFromProvider({
+            provider: PROVIDER.GOOGLE,
+            providerUserId: profile.id,
+            email,
+            name,
+        });
+
+        return done(null, user);
+    } catch (err) {
+        return done(err);
+    }
+}
+
+function googleAuthHandler(isTokenMode: boolean = false) {
+    return (req: express.Request, res: express.Response, next: express.NextFunction) => {
         const redirectParam = req.query.redirect as string | undefined;
         const state = redirectParam ? encodeURIComponent(redirectParam) : "";
-        passport.authenticate("google", { scope: ["profile", "email"], state })(req, res, next);
-    }
-);
+        
+        const callbackURL = isTokenMode ? "/auth/google/token/callback" : "/auth/google/callback";
+        
+        passport.authenticate(isTokenMode ? "google-token" : "google-session", {
+            scope: ["profile", "email"],
+            state,
+            session: !isTokenMode,
+            callbackURL,
+        } as AuthenticateOptions)(req, res, next);
+    };
+}
 
-// Google redirects back here (must match Console redirect URI)
-authRouter.get(
-    "/google/callback",
-    passport.authenticate("google", { failureRedirect: "/" }),
-    (req, res) => {
-        const storedRedirect = req.query.state
-                    ? decodeURIComponent(req.query.state as string)
-                    : undefined;
-    
-        // pick the first allowed if invalid or missing
-        const redirectUrl = allowedOrigins.find(o => storedRedirect?.startsWith(o))
-            ? storedRedirect!
-            : allowedOrigins[0] + '/settings';
-        res.redirect(redirectUrl);
-    },
-);
+function googleCallbackHandler(isTokenMode: boolean = false) {
+    return [
+        passport.authenticate(isTokenMode ? "google-token" : "google-session", {
+            failureRedirect: "/",
+            session: !isTokenMode, 
+        }),
+        async (req: any, res: express.Response) => {
+            const storedRedirect = req.query.state
+                ? decodeURIComponent(req.query.state as string)
+                : undefined;
+
+            const redirectUrl =
+                allowedOrigins.find(o => storedRedirect?.startsWith(o)) 
+                    ? storedRedirect! 
+                    : allowedOrigins[0] + "/settings";
+
+            if (isTokenMode) {
+                // JWT mode
+                const jwtToken = jwt.sign(
+                    { id: req.user.id, email: req.user.email },
+                    process.env.JWT_SECRET!,
+                    { expiresIn: "30d" }
+                );
+
+                // Support both JSON and redirect deep link
+                // if (storedRedirect?.startsWith("wenbun://")) {
+                if (storedRedirect) {
+                    return res.redirect(`${storedRedirect}?token=${jwtToken}`);
+                }
+
+                return res.json({ token: jwtToken });
+            } else {
+                // Cookie/session mode
+                return res.redirect(redirectUrl);
+            }
+        }
+    ];
+}
+
+// Web (session)
+authRouter.get("/google", googleAuthHandler(false));
+authRouter.get("/google/callback", ...googleCallbackHandler(false));
+// Desktop/Mobile (token)
+authRouter.get("/google/token", googleAuthHandler(true));
+authRouter.get("/google/token/callback", ...googleCallbackHandler(true));
+
+
 
 authRouter.get("/logout", (req, res) => {
     const redirectParam = req.query.redirect as string | undefined;
