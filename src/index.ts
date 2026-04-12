@@ -62,6 +62,7 @@ app.use(
         secret: process.env.SESSION_SECRET!,
         resave: false,
         saveUninitialized: false,
+        rolling: true,
         // if under the same domain:
         // cookie: {
         //     sameSite: process.env.NODE_ENV === "production" ? "lax" : undefined,
