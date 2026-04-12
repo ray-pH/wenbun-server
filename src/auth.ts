@@ -181,7 +181,7 @@ function googleCallbackHandler(isTokenMode: boolean = false) {
                 const jwtToken = jwt.sign(
                     { id: req.user.id, email: req.user.email },
                     process.env.JWT_SECRET!,
-                    { expiresIn: "30d" }
+                    { expiresIn: "90d" }
                 );
 
                 // Support both JSON and redirect deep link
