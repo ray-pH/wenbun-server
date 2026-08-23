@@ -4,6 +4,24 @@ import { PoolClient } from "pg";
 
 const router = Router();
 
+router.get("/metadata", async (req, res) => {
+    const userId = req.user!.id;
+    const q = await db.query(
+        `
+        SELECT
+            updated_at AS "updatedAt",
+            data->'meta'->>'modifiedAt' AS "modifiedAt",
+            data->'meta'->>'_profileVersion' AS "profileVersion"
+        FROM profile_data
+        WHERE user_id = $1 AND is_backup = false
+        LIMIT 1
+        `,
+        [userId],
+    );
+    if (q.rowCount === 0) return res.status(204).end();
+    return res.json(q.rows[0]);
+});
+
 router.get("/", async (req, res) => {
     const userId = req.user!.id;
     const q = await db.query("SELECT data FROM profile_data WHERE user_id = $1 AND is_backup = false", [userId]);
